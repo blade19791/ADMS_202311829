@@ -1,0 +1,48 @@
+# Storage Investigation Report
+**Project:** ULK Academic Activity and Resource Management System
+**Phase 12: Storage Investigation**
+
+## 1. Introduction
+This report analyzes how the ULK Academic System data is physically stored on disk by PostgreSQL.
+
+## 2. PostgreSQL Storage Architecture
+PostgreSQL stores data in fixed-size blocks called **Pages**, typically **8 KB** in size. Each table is stored in a separate file (or multiple files if it exceeds 1 GB).
+
+### Page Structure:
+- **Page Header:** Metadata about the page.
+- **Item Pointers:** Pointers to the actual rows (tuples) in the page.
+- **Free Space:** Space available for new rows.
+- **Tuples:** The actual data rows.
+
+## 3. Table Size Analysis (Estimated)
+Given the population of 100 students and 20 lecturers:
+
+| Table | Est. Row Size | Rows | Total Data Size |
+|-------|---------------|------|-----------------|
+| `Student` | ~250 bytes | 100 | ~25 KB |
+| `Lecturer` | ~300 bytes | 20 | ~6 KB |
+| `Enrollment` | ~60 bytes | 300 | ~18 KB |
+| `Course` | ~150 bytes | 30 | ~4.5 KB |
+
+**Total Database Size (with indices and system catalogs):** ~8-10 MB.
+
+## 4. Advanced Data Types and Storage
+### 4.1 JSONB (Laboratory Equipment)
+The `equipment_inventory` column in the `Laboratory` table uses the `JSONB` format. 
+- **Storage:** JSONB is stored in a decomposed binary format. 
+- **Optimization:** If the JSON document is large (e.g., > 2 KB), PostgreSQL uses **TOAST** (The Oversized-Attribute Storage Technique) to store the value out-of-line in a separate table, preventing the main table from becoming bloated.
+
+### 4.2 Array Attributes (Research Interests)
+The `research_interests` column stores tags in an array. These are stored contiguously within the row.
+
+## 5. Heap and Index Storage
+- **Heap:** The `Student` table is stored as a "Heap," where rows are placed wherever there is room.
+- **Index:** The `idx_student_code` index is a separate structure (B-tree) that stores the `student_code` and a pointer (TID) to the heap row.
+
+## 6. Physical File Organization
+In the PostgreSQL data directory (e.g., `/var/lib/postgresql/data/base/`), each table can be identified by its `relfilenode`. 
+- **Command to find file:** `SELECT pg_relation_filepath('Student');`
+- **Command to check size:** `SELECT pg_size_pretty(pg_total_relation_size('Student'));`
+
+## 7. Conclusion
+PostgreSQL's page-based storage system ensures efficient data retrieval and consistency. The use of JSONB and Arrays allows for flexible academic data modeling while the TOAST mechanism handles large attributes without sacrificing the performance of the main table scans.
